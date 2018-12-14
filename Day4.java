@@ -43,6 +43,59 @@ public class Day4 {
         }
     }
 
+    private class Guard {
+        private int id;
+        private int[] record;
+
+        public Guard(int id) {
+            this.id = id;
+            this.record = new int[60];
+        }
+
+        public int getID() {
+            return this.id;
+        }
+        public int[] getRecord() {
+            return this.record;
+        }
+        public int getRecord(int i) {
+            return this.record[i];
+        }
+        public void setRecord(int i, int value) {
+            this.record[i] = value;
+        }
+
+        public int getTotalMinsAsleep() {
+            int ret = 0;
+            for (int i = 0; i < record.length; i++) {
+                ret += record[i];
+            }
+            return ret;
+        }
+
+        public int getMinuteMostSlept() {
+            int ret = -1;
+            int max = 0;
+            for (int i = 0; i < record.length; i++) {
+                if (record[i] > max) {
+                    max = record[i];
+                    ret = i;
+                }
+            }
+            return ret;
+        }
+
+        public int getInstancesOfMinMostSlept() {
+            return record[this.getMinuteMostSlept()];
+        }
+
+        public void addSleepRecord(int start, int end) {
+            for (int i = start; i < end; i++) {
+                record[i]++;
+            }
+        }
+    }
+
 	public static void main(String[] args) {
        try {
            Day4 day4 = new Day4();
@@ -103,82 +156,66 @@ public class Day4 {
             }
             f.close();
 
-            observations.sort((Observation o1, Observation o2) -> (o1.getDate().compareTo(o2.getDate())));
-
-            // observations are now sorted
-            // next step: assign guard IDs to wakeup and fall-asleep actions
-                // simultaneously calculate total minutes asleep for each guard and keep track of max minutes asleep
-            
-            int runningID = 0;
-            int maxMinsID = 0;
-            int maxMinsTotal = 0;
-            int minuteAsleep = 0;
-            Map<Integer, Integer> minutesAsleep = new HashMap<Integer, Integer>();
-            for (Observation o : observations) {
-                if (o.getID() != 0) {
-                    runningID = o.getID();
-                } else {
-                    o.setID(runningID);
-                }
-
-                if (o.getAction() == 2) {
-                    minuteAsleep = o.getMinute();
-                } else if (o.getAction() == 3) {
-                    int newMinute = o.getMinute() - minuteAsleep;  // now holds minutes of difference
-
-                    if (minutesAsleep.containsKey(o.getID())) {
-                        int oldMinutes = minutesAsleep.get(o.getID());
-                        minutesAsleep.remove(o.getID());
-                        minutesAsleep.put(o.getID(), oldMinutes + newMinute);
-
-                        if (oldMinutes + newMinute > maxMinsTotal) {
-                            maxMinsID = o.getID();
-                            maxMinsTotal = oldMinutes + newMinute;
-                        }
-                    } else {
-                        minutesAsleep.put(o.getID(), newMinute);
-
-                        if (newMinute > maxMinsTotal) {
-                            maxMinsID = o.getID();
-                            maxMinsTotal = newMinute;
-                        }
-                    }
-                }
-            }
-
-            // now, find the minute at which the guard with ID maxMinsID was most often asleep
-
-            int[] asleep = new int[60];
-            int fallsAsleep = 0;
-            for (Observation o : observations) {
-                if (o.getID() == maxMinsID) {
-                    if (o.getAction() == 2) {
-                        fallsAsleep = o.getMinute();
-                    } else if (o.getAction() == 3) {
-                        int wakesUp = o.getMinute();
-                        for (int i = fallsAsleep; i < wakesUp; i++) {
-                            asleep[i]++;
-                        }
-                    }
-                }
-            }
-            int maxMinute = 0;
-            maxMinsTotal = 0;
-            for (int i = 0; i < asleep.length; i++) {
-                if (asleep[i] > maxMinsTotal) {
-                    maxMinute = i;
-                    maxMinsTotal = asleep[i];
-                }
-            }
-            System.out.println("maxID: " + maxMinsID);
-            System.out.println("maxMinute: " + maxMinute);
-            System.out.println("multiplied result: " + maxMinsID * maxMinute);
-
         } catch (FileNotFoundException e) {
             System.out.println("File not found!");
             System.exit(1);
         } catch (ParseException pe) {
             pe.printStackTrace();
         }
+
+        observations.sort((Observation o1, Observation o2) -> (o1.getDate().compareTo(o2.getDate())));
+
+        // next step: assign guard IDs to wakeup and fall-asleep actions
+            // simultaneously calculate total minutes asleep for each guard and keep track of max minutes asleep
+        
+        int runningID = 0;
+        int minuteAsleep = 0;
+        Map<Integer, Guard> guards = new HashMap<Integer, Guard>();
+        for (Observation o : observations) {
+            if (o.getID() != 0) {
+                runningID = o.getID();
+            } else {
+                o.setID(runningID);
+            }
+
+            if (o.getAction() == 2) {
+                minuteAsleep = o.getMinute();
+            } else if (o.getAction() == 3) {
+                Guard g;
+                if (guards.containsKey(o.getID())) {
+                    g = guards.get(o.getID());
+                } else {
+                    g = new Guard(o.getID());
+                    guards.put(o.getID(), g);
+                }
+                g.addSleepRecord(minuteAsleep, o.getMinute());
+            }
+        }
+
+        int maxMinsTotal = 0, maxMinsID = 0;
+        int winningGuardID = 0, mostTimesSleptOnSameMinute = 0;
+        for (Map.Entry<Integer, Guard> entry : guards.entrySet()) {
+            Guard g = entry.getValue();
+            if (g.getTotalMinsAsleep() > maxMinsTotal) {
+                maxMinsID = g.getID();
+                maxMinsTotal = g.getTotalMinsAsleep();
+            }
+
+            if (g.getInstancesOfMinMostSlept() > mostTimesSleptOnSameMinute) {
+                mostTimesSleptOnSameMinute = g.getInstancesOfMinMostSlept();
+                winningGuardID = g.getID();
+            }
+        }
+
+        // now, find the minute at which the guard with ID maxMinsID was most often asleep
+        int maxMinute = guards.get(maxMinsID).getMinuteMostSlept();
+
+        System.out.println("maxID: " + maxMinsID);
+        System.out.println("maxMinute: " + maxMinute);
+        System.out.println("multiplied result: " + maxMinsID * maxMinute);
+
+        int mostAsleepMinute = guards.get(winningGuardID).getMinuteMostSlept();
+        System.out.println("guard #" + winningGuardID + " fell asleep " + mostTimesSleptOnSameMinute + " times on minute " + mostAsleepMinute);
+        System.out.println("multiplied result: " + winningGuardID * mostAsleepMinute);
     }
 }
